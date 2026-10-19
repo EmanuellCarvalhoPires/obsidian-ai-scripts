@@ -1,0 +1,10 @@
+{
+  "id": "ai-scripts",
+  "name": "AI Scripts",
+  "version": "1.0.0",
+  "minAppVersion": "1.13.0",
+  "description": "Manage, categorize and safely run local automation scripts for AI agents with parameter validation, real-time streaming execution view, and strict process control.",
+  "author": "Emanuell Pires",
+  "authorUrl": "https://github.com/EmanuellCarvalhoPires",
+  "isDesktopOnly": true
+}

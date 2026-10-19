@@ -1,0 +1,63 @@
+/* Core status bar and shared utility styles for AI Scripts (prefix: ais-). */
+.ais-status-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ais-status-bar-icon,
+.ais-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ais-status-bar-icon svg,
+.ais-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ais-status-bar.ais-state-connected .ais-status-bar-icon {
+  color: var(--text-success);
+}
+
+.ais-status-bar.ais-state-waiting .ais-status-bar-icon {
+  color: var(--text-muted);
+}
+
+.ais-status-bar.ais-state-error .ais-status-bar-icon {
+  color: var(--text-error);
+}
+
+.ais-mono {
+  font-family: var(--font-monospace);
+}
+
+.ais-muted {
+  color: var(--text-muted);
+}
+
+.ais-hidden {
+  display: none !important;
+}
+
+.ais-empty-state {
+  padding: 10px 12px;
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 0.88em;
+}
+
+@keyframes ais-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ais-spin svg {
+  animation: ais-rotate 1s linear infinite;
+}

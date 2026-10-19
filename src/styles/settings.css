@@ -1,0 +1,60 @@
+/* Modal and Settings styles for AI Scripts (prefix: ais-). */
+.ais-modal-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.ais-modal-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ais-status-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.ais-status-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ais-status-icon.ais-status-connected {
+  color: var(--text-success);
+}
+
+.ais-status-icon.ais-status-waiting {
+  color: var(--text-muted);
+}
+
+.ais-status-icon.ais-status-error {
+  color: var(--text-error);
+}
+
+.ais-manual-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--text-error);
+  background-color: var(--background-secondary);
+}
+
+.ais-issue-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-error);
+  font-size: 0.86em;
+}
+
+.ais-code-textarea {
+  width: 100%;
+  min-height: 110px;
+}
