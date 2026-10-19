@@ -1,0 +1,206 @@
+/* Live Script Monitor ItemView styles (prefix: ais-). */
+.ais-monitor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 12px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.ais-monitor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.ais-monitor-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.96em;
+}
+
+.ais-monitor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ais-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  font-size: 0.82em;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.ais-btn-primary {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.ais-btn-danger {
+  border-color: var(--text-error);
+  color: var(--text-error);
+}
+
+.ais-monitor-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  font-size: 0.82em;
+  font-weight: 600;
+}
+
+.ais-summary-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ais-status-running {
+  color: var(--interactive-accent);
+}
+
+.ais-status-succeeded {
+  color: var(--text-success);
+}
+
+.ais-status-failed {
+  color: var(--text-error);
+}
+
+.ais-status-cancelled {
+  color: var(--text-muted);
+}
+
+.ais-monitor-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ais-section-heading {
+  font-size: 0.82em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.ais-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ais-run-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background-color: var(--background-secondary);
+  overflow: hidden;
+}
+
+.ais-run-card-active {
+  border-color: var(--interactive-accent);
+}
+
+.ais-run-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.ais-run-card-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.ais-run-card-name {
+  font-weight: 600;
+  font-size: 0.9em;
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ais-run-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ais-run-timer {
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.ais-run-card-body {
+  padding: 0 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ais-run-meta {
+  font-size: 0.78em;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ais-run-meta-line {
+  word-break: break-word;
+}
+
+.ais-terminal {
+  padding: 8px 10px;
+  border-radius: 5px;
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 0.8em;
+  line-height: 1.45;
+  user-select: text;
+}
+
+.ais-terminal-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ais-terminal-prompt {
+  color: var(--text-muted);
+}
+
+.ais-terminal-stdout {
+  color: var(--text-normal);
+}
+
+.ais-terminal-stderr {
+  color: var(--text-error);
+}
