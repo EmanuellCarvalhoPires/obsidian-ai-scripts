@@ -3,6 +3,7 @@ import { FileSystemAdapter, Notice, Plugin, TAbstractFile, TFile, setIcon } from
 import { EcosystemConnector } from "./ecosystem/connector";
 import type { ConnectorStatus } from "./ecosystem/connector";
 import { MissingEcosystemModal } from "./ecosystem/dependency-modal";
+import { createSetupHandler, publishRuleData, registerSetupHandler } from "./ecosystem/hooks-integration";
 import { AI_ECOSYSTEM_API_VERSION } from "./ecosystem/types";
 import { ExecutionCoordinator } from "./execution/execution-coordinator";
 import { PayloadFormatter } from "./execution/payload-formatter";
@@ -25,8 +26,8 @@ import { AIScriptsSettingTab } from "./ui/settings-tab";
 import type { SettingsHost } from "./ui/settings-tab";
 import { ParamValidator } from "./validation/param-validator";
 
-function isMarkdownFile(file: TAbstractFile): file is TFile {
-  return file instanceof TFile && file.extension === "md";
+function isScriptCandidateFile(file: TAbstractFile): file is TFile {
+  return file instanceof TFile && /\.(md|py|sh|ps1|js|mjs|ts)$/i.test(file.path);
 }
 
 export default class AIScriptsPlugin extends Plugin implements SettingsHost {
@@ -47,6 +48,7 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
   private statusIconEl: HTMLElement | undefined;
   private statusTextEl: HTMLElement | undefined;
   private unsubscribeLoader: (() => void) | undefined;
+  private unregisterSetupHandler: (() => void) | undefined;
 
   async onload(): Promise<void> {
     this.settings = normalizeSettings(await this.loadData());
@@ -83,6 +85,18 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
           void this.openMonitorView();
         }
       },
+      beginActivity: (entry) => {
+        const api = this.connector?.getApi();
+        if (!api || typeof api.beginActivity !== "function") return undefined;
+        return api.beginActivity({
+          moduleId: MODULE_ID,
+          client: entry.client,
+          type: entry.type,
+          target: entry.target,
+          payload: entry.payload,
+          alert: entry.alert,
+        });
+      },
       logActivity: (entry) => {
         const api = this.connector?.getApi();
         if (!api) return;
@@ -95,6 +109,8 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
           durationMs: entry.durationMs,
           payload: entry.payload,
           response: entry.response,
+          output: entry.output,
+          alert: entry.alert,
         });
       },
     });
@@ -106,10 +122,23 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
       this.settingTab?.refresh();
       const api = this.connector?.getApi();
       if (api) {
+        this.publishHookRuleData();
         api.updateTools(
           MODULE_ID,
           buildAllTools(this.service, this.loader, this.registry, this.coordinator),
         );
+        api.logActivity({
+          moduleId: MODULE_ID,
+          client: "Obsidian UI",
+          type: "scripts-reloaded",
+          target: `${this.registry.listAll().length} scripts`,
+          status: 200,
+          durationMs: 0,
+          response: {
+            scripts: this.registry.listAll().length,
+            categories: this.registry.listCategories(),
+          },
+        });
       }
     });
 
@@ -143,6 +172,17 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
       onIncompatible: (reason) => new Notice(reason),
       onConnected: (api) => {
         api.registerService("scripts", MODULE_ID, this.service);
+        this.publishHookRuleData();
+        this.unregisterSetupHandler?.();
+        this.unregisterSetupHandler = registerSetupHandler(
+          api,
+          createSetupHandler({
+            getSettings: () => this.settings,
+            saveSettings: () => this.saveSettings(),
+            getScripts: () => this.registry.listAll(),
+            folderExists: (path) => this.vaultPort.exists(path),
+          }),
+        );
       },
     });
     this.connector.start();
@@ -196,14 +236,19 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
     this.settingTab = new AIScriptsSettingTab(this.app, this, this);
     this.addSettingTab(this.settingTab);
 
-    this.app.workspace.onLayoutReady(() => {
+    if (this.app.workspace.layoutReady) {
       void this.loader.load();
-    });
+    } else {
+      this.app.workspace.onLayoutReady(() => {
+        void this.loader.load();
+      });
+    }
   }
 
   onunload(): void {
     this.coordinator?.cancelAll();
     this.unsubscribeLoader?.();
+    this.unregisterSetupHandler?.();
     this.connector?.stop();
   }
 
@@ -281,9 +326,16 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
 
   // ---- Internals ------------------------------------------------------------
 
+  private publishHookRuleData(): void {
+    publishRuleData(this.connector?.getApi(), this.settings.scriptsFolder, this.registry.listAll());
+  }
+
   private registerVaultWatchers(): void {
     const reloadIfScriptNote = (file: TAbstractFile, oldPath?: string): void => {
-      if (isMarkdownFile(file) || (typeof oldPath === "string" && oldPath.endsWith(".md"))) {
+      const isCandidate =
+        isScriptCandidateFile(file) ||
+        (typeof oldPath === "string" && /\.(md|py|sh|ps1|js|mjs|ts)$/i.test(oldPath));
+      if (isCandidate) {
         this.loader.invalidate();
         void this.loader.load();
       }

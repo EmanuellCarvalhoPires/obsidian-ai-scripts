@@ -13,3 +13,16 @@ Manage, categorize and safely run local automation scripts for AI agents inside 
 - **Environment Keys Integration:** Injects `{{secret:NAME}}` placeholders directly into the subprocess environment via `secrets.spawnWithSecrets()` and sanitizes all real-time `stdout`/`stderr` streams via `secrets.redact()`.
 - **AI Script Monitor (`ItemView`):** Real-time execution panel with spinning status indicators, elapsed timer, instant process termination (`Stop`), auto-scrolling terminal output, and collapsible execution history.
 - **MCP Tools & Dynamic Tool Factory:** Registers `list_ai_scripts`, `get_script_schema`, `run_ai_script`, plus dedicated `script_<script_id>` tools for scripts with `expose_as_tool: true`.
+
+## Claude Code hooks and guided setup
+
+The AI Ecosystem core can install Claude Code hooks and a setup skill for this module in the vault's `.claude/` folder:
+
+- skill in `.claude/skills/configurar-ai-scripts/`, hook entries in `.claude/settings.local.json` (or `settings.json`), state in `.claude/ai-ecosystem/`, and a block in `GEMINI.md` for Antigravity.
+- Modules downloaded from the AI Ecosystem module catalog show a confirmation screen listing what will be written before installing. Nothing in your own `.claude/` entries is overwritten.
+- Until the guided setup finishes, the module's tools are hidden from Claude Code (other clients still see them).
+- Hooks can be set to block, warn or off per module in the AI Ecosystem settings, and they fail open when Obsidian or the plugin is not running.
+
+**Protection hook:** running a script from an allowed script folder through the terminal (`python`, `node`, `bash`, `pwsh`...) is redirected to `ecosystem_run_script` (or `run_ai_script` when the script is registered). AI Scripts feeds the core with its script folders: the configured scripts folder plus the folders of external `script_path` files.
+
+**Setup keys:** `pasta_de_scripts` (scripts folder) and `pode_gravar_fora_do_cofre` (allow writing outside the vault). The second one is only stored for now; it is not enforced yet.

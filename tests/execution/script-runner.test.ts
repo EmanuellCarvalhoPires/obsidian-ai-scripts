@@ -237,4 +237,61 @@ console.log("ok from inline");
     expect(spawnCalls).toHaveLength(1);
     expect(spawnCalls[0]?.cmd).toBe("node");
   });
+
+  it("logs real-time activity via beginActivity and records completion", async () => {
+    const appendSpy = vi.fn();
+    const endSpy = vi.fn();
+    const beginActivitySpy = vi.fn().mockReturnValue({
+      id: "act-1",
+      appendOutput: appendSpy,
+      end: endSpy,
+    });
+    const logActivitySpy = vi.fn();
+
+    const parsed = parseScriptNote("Scripts/AI/Sync.md", noteMarkdown);
+    const registry = new ScriptRegistry();
+    registry.replaceAll([parsed.definition!]);
+
+    const bridge = new ProcessBridge({
+      getApi: () =>
+        ({
+          runScript: async (opts: HubScriptOptions) => {
+            opts.onStdout?.("Line 1\n");
+            return { exitCode: 0, stdout: "Line 1\n", stderr: "", durationMs: 10, killed: false };
+          },
+        }) as unknown as AIEcosystemAPI,
+      getVaultBasePath: () => "",
+      getScriptsFolder: () => "Scripts/AI",
+    });
+
+    const coordinator = new ExecutionCoordinator({
+      registry,
+      validator: new ParamValidator(),
+      formatter: new PayloadFormatter(),
+      bridge,
+      beginActivity: beginActivitySpy,
+      logActivity: logActivitySpy,
+    });
+
+    await coordinator.run({
+      scriptId: "sync_jira",
+      params: { instancia: "CSP Tech" },
+      client: "Antigravity",
+    });
+
+    expect(beginActivitySpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        client: "Antigravity",
+        type: "Script Run",
+        target: expect.stringContaining("sync_jira"),
+      }),
+    );
+    expect(appendSpy).toHaveBeenCalledWith("stdout", expect.stringContaining("Line 1"));
+    expect(endSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 200,
+        response: expect.objectContaining({ status: "succeeded", exitCode: 0 }),
+      }),
+    );
+  });
 });

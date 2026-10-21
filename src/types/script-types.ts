@@ -110,6 +110,8 @@ export interface AIScriptsSettings {
   defaultTimeoutSeconds: number;
   maxHistoryEntries: number;
   autoOpenMonitorOnRun: boolean;
+  /** Stored for the guided setup only; the plugin does not enforce it. */
+  allowWriteOutsideVault: boolean;
 }
 
 export const DEFAULT_SETTINGS: AIScriptsSettings = {
@@ -117,6 +119,7 @@ export const DEFAULT_SETTINGS: AIScriptsSettings = {
   defaultTimeoutSeconds: 120,
   maxHistoryEntries: 100,
   autoOpenMonitorOnRun: false,
+  allowWriteOutsideVault: false,
 };
 
 export function normalizeFolder(folder: string): string {
@@ -149,11 +152,16 @@ export function normalizeSettings(raw: unknown): AIScriptsSettings {
     typeof obj.autoOpenMonitorOnRun === "boolean"
       ? obj.autoOpenMonitorOnRun
       : DEFAULT_SETTINGS.autoOpenMonitorOnRun;
+  const allowWriteOutsideVault =
+    typeof obj.allowWriteOutsideVault === "boolean"
+      ? obj.allowWriteOutsideVault
+      : DEFAULT_SETTINGS.allowWriteOutsideVault;
 
   return {
     scriptsFolder,
     defaultTimeoutSeconds,
     maxHistoryEntries,
     autoOpenMonitorOnRun,
+    allowWriteOutsideVault,
   };
 }
