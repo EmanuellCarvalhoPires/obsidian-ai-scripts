@@ -123,6 +123,10 @@ export class ProcessBridge {
     }
   }
 
+  getVaultBasePath(): string {
+    return this.deps.getVaultBasePath();
+  }
+
   redact(text: string): string {
     if (!text) return "";
     const secrets = this.getSecretsService();
@@ -242,6 +246,7 @@ export class ProcessBridge {
         cwd: script.cwd,
         timeoutSeconds,
         env: script.env,
+        skipActivityLog: true,
         onStdout: handleStdout,
         onStderr: handleStderr,
       },
