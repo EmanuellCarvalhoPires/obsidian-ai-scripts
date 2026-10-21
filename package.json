@@ -1,6 +1,6 @@
 {
   "name": "obsidian-ai-scripts",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Manage, categorize and safely run local automation scripts for AI agents with parameter validation, real-time streaming execution view, and strict process control.",
   "main": "main.js",
   "private": true,
