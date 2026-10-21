@@ -56,6 +56,14 @@ export function splitFrontmatter(content: string): { yaml: string | undefined; b
   return { yaml: match[1], body: content.slice(match[0].length) };
 }
 
+/** Extracts YAML frontmatter embedded within a Python docstring (or shell comment header). */
+export function extractDocstringFrontmatter(content: string): { yaml: string | undefined; body: string } {
+  // Checks for --- \n (id: ...) \n --- inside the file header / docstring
+  const match = /---\s*\r?\n(id:\s*[\s\S]*?\r?\n)---/.exec(content);
+  if (!match) return { yaml: undefined, body: content };
+  return { yaml: match[1], body: content };
+}
+
 export function extractInlineCode(body: string, runtime: ScriptRuntime): string | undefined {
   const blocks: Array<{ lang: string; code: string }> = [];
   let match: RegExpExecArray | null;
@@ -288,7 +296,10 @@ export function parseScriptNote(
   content: string,
   defaultTimeoutSeconds: number = DEFAULT_SETTINGS.defaultTimeoutSeconds,
 ): ParsedScriptNote {
-  const { yaml, body } = splitFrontmatter(content);
+  const isCodeFile = /\.(py|sh|ps1|js|mjs|ts)$/i.test(notePath);
+  const { yaml, body } = isCodeFile
+    ? extractDocstringFrontmatter(content)
+    : splitFrontmatter(content);
   if (yaml === undefined) {
     return { isScriptNote: false, problems: [] };
   }
@@ -381,8 +392,8 @@ export function parseScriptNote(
     }
   }
 
-  const rawExpose = front.expose_as_tool ?? front.exposeAsTool;
-  const exposeAsTool = rawExpose === true;
+  const rawExpose = front.expose_as_tool ?? front.exposeAsTool ?? front.expose;
+  const exposeAsTool = rawExpose === true || rawExpose === 1;
 
   let scriptPath: string | undefined;
   const rawScriptPath = front.script_path ?? front.scriptPath;
@@ -397,6 +408,9 @@ export function parseScriptNote(
         scriptPath = normalized;
       }
     }
+  } else if (isCodeFile) {
+    // If it's a code file (e.g. .py) with docstrings, default script_path to itself
+    scriptPath = normalizePath(notePath);
   }
 
   let cwd: string | undefined;

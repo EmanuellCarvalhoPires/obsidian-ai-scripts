@@ -129,4 +129,68 @@ console.log("hello from inline script");
     expect(registry.listCategories()).toEqual(["Jira"]);
     expect(registry.listExposedTools()).toHaveLength(1);
   });
+
+  it("parses Python script file with YAML frontmatter in docstring", () => {
+    const pythonCode = `#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+---
+id: meu_script_python
+nome: Meu Script Python
+categoria: Automacao
+descricao: "Executa tarefa automatizada"
+runtime: python
+expose: true
+params:
+  nome:
+    type: string
+    required: true
+    description: "Nome do usuario"
+---
+
+Documentacao detalhada do script em Python.
+"""
+import sys
+
+print("Hello World")
+`;
+
+    const parsed = parseScriptNote("scripts/meu_script.py", pythonCode);
+    expect(parsed.isScriptNote).toBe(true);
+    expect(parsed.problems).toHaveLength(0);
+    expect(parsed.definition).toBeDefined();
+
+    const def = parsed.definition!;
+    expect(def.scriptId).toBe("meu_script_python");
+    expect(def.name).toBe("Meu Script Python");
+    expect(def.category).toBe("Automacao");
+    expect(def.scriptPath).toBe("scripts/meu_script.py");
+    expect(def.runtime).toBe("python");
+    expect(def.exposeAsTool).toBe(true);
+    expect(def.jsonSchema).toEqual({
+      type: "object",
+      properties: {
+        nome: {
+          type: "string",
+          description: "Nome do usuario",
+        },
+      },
+      required: ["nome"],
+      additionalProperties: false,
+    });
+  });
+
+  it("ignores Python script file without YAML docstrings", () => {
+    const pythonRegular = `#!/usr/bin/env python3
+"""
+A simple script without metadata frontmatter.
+"""
+import os
+print("No frontmatter")
+`;
+
+    const parsed = parseScriptNote("scripts/regular.py", pythonRegular);
+    expect(parsed.isScriptNote).toBe(false);
+    expect(parsed.definition).toBeUndefined();
+  });
 });
