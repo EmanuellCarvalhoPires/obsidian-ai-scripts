@@ -15,6 +15,7 @@ import type { ScriptRegistry } from "../scripts/script-registry";
 import type { ParamValidator } from "../validation/param-validator";
 import type { PayloadFormatter } from "./payload-formatter";
 import type { ProcessBridge } from "./process-bridge";
+import type { ActivityHandle } from "../ecosystem/types";
 
 export class ScriptNotFoundError extends Error {
   readonly status = 404;
@@ -39,9 +40,21 @@ export class ScriptValidationError extends Error {
   }
 }
 
+export class ScriptDocstringMissingError extends Error {
+  readonly status = 400;
+
+  constructor(scriptId: string, path: string) {
+    super(
+      `Execution blocked: Script "${scriptId}" at "${path}" does not have a valid docstring header with YAML metadata (id, params).`,
+    );
+    this.name = "ScriptDocstringMissingError";
+  }
+}
+
 interface ActiveRunContext {
   record: ExecutionRecord;
   controller: AbortController;
+  activityHandle?: ActivityHandle;
 }
 
 export interface ExecutionCoordinatorDeps {
@@ -51,6 +64,13 @@ export interface ExecutionCoordinatorDeps {
   bridge: ProcessBridge;
   getMaxHistoryEntries?: () => number;
   onRunStarted?: (record: ExecutionRecord) => void;
+  beginActivity?: (entry: {
+    client?: string;
+    type: string;
+    target: string;
+    payload?: unknown;
+    alert?: boolean;
+  }) => ActivityHandle | undefined;
   logActivity?: (entry: {
     client?: string;
     type: string;
@@ -59,6 +79,8 @@ export interface ExecutionCoordinatorDeps {
     durationMs: number;
     payload?: unknown;
     response?: unknown;
+    output?: string;
+    alert?: boolean;
   }) => void;
 }
 
@@ -149,7 +171,45 @@ export class ExecutionCoordinator {
     // 1. Gatekeeper validation BEFORE formatting payload or spawning any OS process
     const validation = this.deps.validator.validate(script, rawParams ?? {});
     if (!validation.valid) {
+      this.deps.logActivity?.({
+        client,
+        type: "Script Run",
+        target: `${script.scriptId} (${script.scriptPath ?? script.notePath})`,
+        status: 400,
+        durationMs: 0,
+        payload: rawParams,
+        response: { error: validation.issues.map((i) => i.message).join("; "), issues: validation.issues },
+      });
       throw new ScriptValidationError(script.name, validation.issues);
+    }
+
+    // 1b. Verify that code files on disk contain valid docstring headers before execution
+    if (script.scriptPath && /\.(py|sh|ps1|js|mjs|ts)$/i.test(script.scriptPath)) {
+      try {
+        const vaultBase = this.deps.bridge.getVaultBasePath();
+        const absPath = vaultBase ? `${vaultBase}/${script.scriptPath}`.replace(/\\/g, "/") : script.scriptPath;
+        const fsModule = await import("node:fs");
+        if (fsModule.existsSync(absPath)) {
+          const content = fsModule.readFileSync(absPath, { encoding: "utf8" });
+          if (!/---\s*\r?\n(id:\s*[\s\S]*?\r?\n)---/.test(content)) {
+            throw new ScriptDocstringMissingError(script.scriptId, script.scriptPath);
+          }
+        }
+      } catch (err) {
+        if (err instanceof ScriptDocstringMissingError) {
+          this.deps.logActivity?.({
+            client,
+            type: "Script Run",
+            target: `${script.scriptId} (${script.scriptPath})`,
+            status: 400,
+            durationMs: 0,
+            payload: rawParams,
+            response: { error: err.message },
+          });
+          throw err;
+        }
+        // Non-blocking if file read check fails due to path resolver
+      }
     }
 
     const normalizedParams = validation.normalizedParams;
@@ -178,13 +238,21 @@ export class ExecutionCoordinator {
       lines: [],
     };
 
+    const activityHandle = this.deps.beginActivity?.({
+      client,
+      type: "Script Run",
+      target: `${script.scriptId} (${script.scriptPath ?? script.notePath})`,
+      payload: redactedParams,
+    });
+
     const controller = new AbortController();
-    this.activeRuns.set(runId, { record, controller });
+    this.activeRuns.set(runId, { record, controller, activityHandle });
     this.deps.onRunStarted?.(record);
     this.emit({ type: "started", record });
 
     const appendStream = (stream: "stdout" | "stderr", chunk: string): void => {
       const cleanChunk = this.deps.bridge.redact(chunk);
+      activityHandle?.appendOutput(stream, cleanChunk);
       if (stream === "stdout") {
         record.stdout += cleanChunk;
       } else {
@@ -276,6 +344,7 @@ export class ExecutionCoordinator {
   }
 
   private finalizeRecord(record: ExecutionRecord): void {
+    const activeCtx = this.activeRuns.get(record.runId);
     this.activeRuns.delete(record.runId);
     this.historyRuns.unshift(record);
     const maxHistory = this.deps.getMaxHistoryEntries?.() ?? 100;
@@ -283,19 +352,31 @@ export class ExecutionCoordinator {
       this.historyRuns.length = maxHistory;
     }
 
-    this.deps.logActivity?.({
-      client: record.client,
-      type: "Script Run",
-      target: `${record.scriptId} (${record.targetPath})`,
-      status: record.status === "succeeded" ? 200 : record.status === "cancelled" ? 499 : 500,
-      durationMs: record.durationMs,
-      payload: record.params,
-      response: {
-        runId: record.runId,
-        status: record.status,
-        exitCode: record.exitCode,
-      },
-    });
+    const status = record.status === "succeeded" ? 200 : record.status === "cancelled" ? 499 : 500;
+    const response = {
+      runId: record.runId,
+      status: record.status,
+      exitCode: record.exitCode,
+    };
+
+    if (activeCtx?.activityHandle) {
+      activeCtx.activityHandle.end({
+        status,
+        durationMs: record.durationMs,
+        response,
+      });
+    } else {
+      this.deps.logActivity?.({
+        client: record.client,
+        type: "Script Run",
+        target: `${record.scriptId} (${record.targetPath})`,
+        status,
+        durationMs: record.durationMs,
+        payload: record.params,
+        output: record.stdout + (record.stderr ? "\n" + record.stderr : ""),
+        response,
+      });
+    }
 
     this.emit({ type: "finished", record });
   }

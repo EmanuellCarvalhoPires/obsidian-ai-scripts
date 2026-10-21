@@ -9,6 +9,7 @@ import type { ScriptRegistry } from "./script-registry";
 
 export interface ScriptVaultPort {
   listMarkdownFiles(folder: string): string[];
+  listScriptFiles?(folder: string): string[];
   readText(path: string): Promise<string>;
   writeText(path: string, content: string): Promise<void>;
   exists(path: string): boolean;
@@ -19,18 +20,37 @@ export class ObsidianScriptVaultPort implements ScriptVaultPort {
 
   listMarkdownFiles(folder: string): string[] {
     const clean = normalizePath(folder.trim());
-    const prefix = clean === "" || clean === "/" ? "" : `${clean}/`;
+    const prefix = clean === "" || clean === "/" ? "" : `${clean.toLowerCase()}/`;
     return this.app.vault
       .getMarkdownFiles()
       .map((f) => f.path)
-      .filter((p) => prefix === "" || p.startsWith(prefix))
+      .filter((p) => prefix === "" || p.toLowerCase().startsWith(prefix))
+      .sort();
+  }
+
+  listScriptFiles(folder: string): string[] {
+    const clean = normalizePath(folder.trim());
+    const prefix = clean === "" || clean === "/" ? "" : `${clean.toLowerCase()}/`;
+    return this.app.vault
+      .getFiles()
+      .map((f) => f.path)
+      .filter((p) => {
+        const lower = p.toLowerCase();
+        const matchesFolder = prefix === "" || lower.startsWith(prefix);
+        const matchesExt = /\.(md|py|sh|ps1|js|mjs|ts)$/i.test(p);
+        return matchesFolder && matchesExt;
+      })
       .sort();
   }
 
   async readText(path: string): Promise<string> {
-    const file = this.app.vault.getFileByPath(normalizePath(path));
-    if (!file) throw new Error(`File not found: ${path}`);
-    return this.app.vault.cachedRead(file);
+    const normalized = normalizePath(path);
+    const entry =
+      (typeof this.app.vault.getFileByPath === "function"
+        ? this.app.vault.getFileByPath(normalized)
+        : null) ?? this.app.vault.getAbstractFileByPath(normalized);
+    if (!(entry instanceof TFile)) throw new Error(`File not found: ${path}`);
+    return this.app.vault.cachedRead(entry);
   }
 
   async writeText(path: string, content: string): Promise<void> {
@@ -117,7 +137,9 @@ export class ScriptLoader {
     const problems: LoadProblem[] = [];
     const seenIds = new Map<string, string>();
 
-    const paths = vault.listMarkdownFiles(folder === "/" ? "" : folder);
+    const paths = typeof vault.listScriptFiles === "function"
+      ? vault.listScriptFiles(folder === "/" ? "" : folder)
+      : vault.listMarkdownFiles(folder === "/" ? "" : folder);
     for (const path of paths) {
       let content: string;
       try {
