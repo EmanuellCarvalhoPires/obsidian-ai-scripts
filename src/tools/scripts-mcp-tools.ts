@@ -9,7 +9,7 @@ import type { ScriptLoader } from "../scripts/script-loader";
 import type { ScriptRegistry } from "../scripts/script-registry";
 import type { ExecutionRecord, RunScriptResponse, ScriptsServiceContract } from "../types/execution-types";
 import type { ScriptSummary } from "../types/script-types";
-import { buildDynamicTools, formatToolError, formatToolSuccess } from "./dynamic-tool-factory";
+import { buildDynamicTools, buildRunPayload, formatToolError, formatToolSuccess, resolveMaxOutput } from "./dynamic-tool-factory";
 
 export const MODULE_INSTRUCTIONS =
   "AI Scripts manages and executes local automation scripts stored in Scripts/AI/. " +
@@ -66,12 +66,14 @@ export class ScriptsService implements ScriptsServiceContract {
     scriptId: string,
     params?: Record<string, unknown>,
     client = "AI Agent",
+    maxOutput?: number,
   ): Promise<RunScriptResponse> {
     await this.loader.load();
     return this.coordinator.run({
       scriptId,
       params,
       client,
+      maxOutput,
     });
   }
 
@@ -186,6 +188,12 @@ export function buildStaticTools(
             description: "JSON object with the parameters matching get_script_schema.",
             additionalProperties: true,
           },
+          max_output: {
+            type: "integer",
+            minimum: 1,
+            description:
+              "Max characters of stdout/stderr returned (default 4000, start and end kept). The complete output is saved to stdout_file/stderr_file.",
+          },
         },
         required: ["script_id"],
         additionalProperties: false,
@@ -200,16 +208,13 @@ export function buildStaticTools(
         try {
           const scriptId = typeof args.script_id === "string" ? args.script_id : "";
           const params = asRecord(args.params);
-          const result = await service.runScript(scriptId, params, ctx.client?.name || "AI Agent");
-          return formatToolSuccess({
-            runId: result.runId,
-            success: result.success,
-            status: result.status,
-            exitCode: result.exitCode,
-            stdout: result.stdout,
-            stderr: result.stderr,
-            durationMs: result.durationMs,
-          });
+          const result = await service.runScript(
+            scriptId,
+            params,
+            ctx.client?.name || "AI Agent",
+            resolveMaxOutput(args.max_output),
+          );
+          return formatToolSuccess(buildRunPayload(result));
         } catch (err) {
           return formatToolError(err);
         }

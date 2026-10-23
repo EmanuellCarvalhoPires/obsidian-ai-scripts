@@ -1,7 +1,9 @@
 // Public contracts of the AI Ecosystem plugin that AI Scripts uses.
 //
-// Vendored from obsidian-ai-ecosystem (src/types/index.ts, Provider API version 1),
+// Vendored from obsidian-ai-ecosystem (src/types/index.ts, Provider API version 1, minor 1.1),
 // extended with optional stdin and signal fields on HubScriptOptions for streaming control.
+// The 1.1 additions are the optional HubTool index metadata, api.toolIndex.sync, ToolIndexEntry
+// and the "tool-runner:<module>" service (IndexedToolRunner).
 
 /** Provider API version implemented by the AI Ecosystem this file was copied from. */
 export const AI_ECOSYSTEM_API_VERSION = 1;
@@ -97,7 +99,65 @@ export interface HubTool {
   };
   /** Stays visible while the module still waits for its guided setup. */
   availableDuringSetup?: boolean;
+  /** Index metadata (API 1.1). All optional; defaults are inferred from description and annotations. */
+  categoria?: string;
+  tags?: string[];
+  /** One line, recommended <= 100 characters. */
+  resumo?: string;
+  efeito?: ToolEffect;
+  exposicao?: ToolExposure;
+  /**
+   * Approval policy read by the tools_run hook: a question template with {arg} placeholders,
+   * "obrigatoria" (always ask) or "dispensada" (never ask, even with efeito "externo").
+   */
+  aprovacao?: string;
+  /** Example arguments shown by tools_describe. */
+  exemplo?: Record<string, unknown>;
   handler: (args: Record<string, unknown>, ctx: HubCallContext) => Promise<HubToolResult>;
+}
+
+export type ToolEffect = "leitura" | "cofre" | "externo";
+/** "fixa" stays in tools/list in indexado mode; "indice" is only reachable through tools_find/tools_run. */
+export type ToolExposure = "fixa" | "indice";
+/** What an index entry stands for. */
+export type ToolKind = "tool" | "script" | "template" | "api";
+
+/** What a module writes into its tools.db through api.toolIndex.sync. */
+export interface ToolIndexEntry {
+  name: string;
+  title?: string;
+  description: string;
+  inputSchema?: Record<string, unknown>;
+  annotations?: HubTool["annotations"];
+  /** Default "tool". */
+  kind?: ToolKind;
+  categoria?: string;
+  tags?: string[];
+  resumo?: string;
+  efeito?: ToolEffect;
+  exposicao?: ToolExposure;
+  aprovacao?: string;
+  exemplo?: Record<string, unknown>;
+}
+
+/**
+ * Service a module registers (name: toolRunnerServiceName(moduleId)) to run index entries that
+ * are not registered MCP tools. tools_run calls it when the id is in the module's tools.db but
+ * not in the registry. The result goes back as is.
+ */
+export interface IndexedToolRunner {
+  run(id: string, args: Record<string, unknown>, ctx: HubCallContext): Promise<HubToolResult>;
+}
+
+export const TOOL_RUNNER_SERVICE_PREFIX = "tool-runner:";
+
+export function toolRunnerServiceName(moduleId: string): string {
+  return `${TOOL_RUNNER_SERVICE_PREFIX}${moduleId}`;
+}
+
+export interface ToolIndexApi {
+  /** Incrementally syncs the module's <vault>/<configDir>/plugins/<id>/tools.db (unchanged tools are skipped by hash). */
+  sync(moduleId: string, entries: ToolIndexEntry[]): Promise<void>;
 }
 
 export interface HubPromptMessage {
@@ -277,4 +337,7 @@ export interface AIEcosystemAPI {
   beginActivity?(entry: ActivityBeginInput): ActivityHandle;
 
   getServerStatus(): { running: boolean; port: number; activeModules: string[] };
+
+  /** API 1.1. Absent on older Ecosystem builds: check before use. */
+  readonly toolIndex?: ToolIndexApi;
 }

@@ -164,7 +164,10 @@ params:
       { client: { id: "c1", name: "Antigravity" }, moduleId: MODULE_ID },
     );
     expect(okRes.isError).toBeUndefined();
-    expect(okRes.structuredContent?.success).toBe(true);
+    const content = okRes.content[0];
+    expect(content.type).toBe("text");
+    const payload = JSON.parse((content as { type: "text"; text: string }).text);
+    expect(payload.success).toBe(true);
 
     // Verify ScriptMonitorView renders and has zero emojis in i18n
     const view = new ScriptMonitorView(new WorkspaceLeaf() as never, {

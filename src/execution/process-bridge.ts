@@ -10,6 +10,7 @@ import * as path from "node:path";
 import { clearTimeout, setTimeout } from "node:timers";
 import type { AIEcosystemAPI, ScriptExecutionResult, SecretVaultService } from "../ecosystem/types";
 import { SECRETS_SERVICE } from "../ecosystem/types";
+import { MEMORY_BUFFER_CAP, appendCapped } from "./output-limiter";
 import type { ScriptDefinition, ScriptRuntime } from "../types/script-types";
 
 export const MODULE_ID = "ai-scripts";
@@ -226,13 +227,13 @@ export class ProcessBridge {
 
     const handleStdout = (chunk: string): void => {
       const clean = this.redact(chunk);
-      collectedStdout += clean;
+      collectedStdout = appendCapped(collectedStdout, clean, MEMORY_BUFFER_CAP).value;
       params.onStdout?.(clean);
     };
 
     const handleStderr = (chunk: string): void => {
       const clean = this.redact(chunk);
-      collectedStderr += clean;
+      collectedStderr = appendCapped(collectedStderr, clean, MEMORY_BUFFER_CAP).value;
       params.onStderr?.(clean);
     };
 
@@ -371,10 +372,10 @@ export class ProcessBridge {
       const text = typeof chunk === "string" ? chunk : chunk.toString("utf8");
       const redacted = this.redact(text);
       if (stream === "stdout") {
-        stdoutBuf += redacted;
+        stdoutBuf = appendCapped(stdoutBuf, redacted, MEMORY_BUFFER_CAP).value;
         params.onStdout?.(redacted);
       } else {
-        stderrBuf += redacted;
+        stderrBuf = appendCapped(stderrBuf, redacted, MEMORY_BUFFER_CAP).value;
         params.onStderr?.(redacted);
       }
     };

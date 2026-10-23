@@ -4,7 +4,7 @@ import { EcosystemConnector } from "./ecosystem/connector";
 import type { ConnectorStatus } from "./ecosystem/connector";
 import { MissingEcosystemModal } from "./ecosystem/dependency-modal";
 import { createSetupHandler, publishRuleData, registerSetupHandler } from "./ecosystem/hooks-integration";
-import { AI_ECOSYSTEM_API_VERSION } from "./ecosystem/types";
+import { AI_ECOSYSTEM_API_VERSION, toolRunnerServiceName } from "./ecosystem/types";
 import { ExecutionCoordinator } from "./execution/execution-coordinator";
 import { PayloadFormatter } from "./execution/payload-formatter";
 import { MODULE_ID, ProcessBridge } from "./execution/process-bridge";
@@ -25,6 +25,7 @@ import { ScriptMonitorView, VIEW_TYPE_SCRIPT_MONITOR } from "./ui/live-monitor-v
 import { AIScriptsSettingTab } from "./ui/settings-tab";
 import type { SettingsHost } from "./ui/settings-tab";
 import { ParamValidator } from "./validation/param-validator";
+import { ScriptToolRunner, buildScriptIndexEntries } from "./tools/tool-index";
 
 function isScriptCandidateFile(file: TAbstractFile): file is TFile {
   return file instanceof TFile && /\.(md|py|sh|ps1|js|mjs|ts)$/i.test(file.path);
@@ -41,6 +42,7 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
   private bridge!: ProcessBridge;
   private coordinator!: ExecutionCoordinator;
   private service!: ScriptsService;
+  private toolRunner!: ScriptToolRunner;
   private connector!: EcosystemConnector;
 
   private settingTab: AIScriptsSettingTab | undefined;
@@ -116,6 +118,7 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
     });
 
     this.service = new ScriptsService(this.loader, this.registry, this.coordinator);
+    this.toolRunner = new ScriptToolRunner(this.loader, this.registry, this.coordinator);
 
     this.unsubscribeLoader = this.loader.onLoaded(() => {
       this.updateStatusBar();
@@ -127,6 +130,7 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
           MODULE_ID,
           buildAllTools(this.service, this.loader, this.registry, this.coordinator),
         );
+        this.syncToolIndex();
         api.logActivity({
           moduleId: MODULE_ID,
           client: "Obsidian UI",
@@ -172,6 +176,8 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
       onIncompatible: (reason) => new Notice(reason),
       onConnected: (api) => {
         api.registerService("scripts", MODULE_ID, this.service);
+        api.registerService(toolRunnerServiceName(MODULE_ID), MODULE_ID, this.toolRunner);
+        this.syncToolIndex();
         this.publishHookRuleData();
         this.unregisterSetupHandler?.();
         this.unregisterSetupHandler = registerSetupHandler(
@@ -325,6 +331,19 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
   }
 
   // ---- Internals ------------------------------------------------------------
+
+  /**
+   * Writes the script catalog into the module's tools.db. Skipped until the catalog has loaded once,
+   * so an early connection does not wipe the entries that a previous session wrote.
+   */
+  private syncToolIndex(): void {
+    const api = this.connector?.getApi();
+    if (!api?.toolIndex || !this.loader.lastResult()) return;
+    const entries = buildScriptIndexEntries(this.registry.listAll());
+    api.toolIndex.sync(MODULE_ID, entries).catch((err: unknown) => {
+      console.error("[AI Scripts] Could not sync the tool index", err);
+    });
+  }
 
   private publishHookRuleData(): void {
     publishRuleData(this.connector?.getApi(), this.settings.scriptsFolder, this.registry.listAll());

@@ -2,6 +2,8 @@
 // process cancellation (kill), and in-memory execution history.
 
 import * as crypto from "node:crypto";
+import * as os from "node:os";
+import * as path from "node:path";
 import type {
   ExecutionEvent,
   ExecutionListener,
@@ -16,6 +18,16 @@ import type { ParamValidator } from "../validation/param-validator";
 import type { PayloadFormatter } from "./payload-formatter";
 import type { ProcessBridge } from "./process-bridge";
 import type { ActivityHandle } from "../ecosystem/types";
+import {
+  MEMORY_BUFFER_CAP,
+  SpillFile,
+  appendCapped,
+  pruneSpillDir,
+  truncateHeadTail,
+} from "./output-limiter";
+
+/** Maximum number of log lines kept per run for the monitor. */
+const MAX_RECORD_LINES = 20000;
 
 export class ScriptNotFoundError extends Error {
   readonly status = 404;
@@ -51,6 +63,11 @@ export class ScriptDocstringMissingError extends Error {
   }
 }
 
+export interface RunOptions {
+  /** Max characters of stdout/stderr returned in the response; the full output is spilled to a file. */
+  maxOutput?: number;
+}
+
 interface ActiveRunContext {
   record: ExecutionRecord;
   controller: AbortController;
@@ -63,6 +80,8 @@ export interface ExecutionCoordinatorDeps {
   formatter: PayloadFormatter;
   bridge: ProcessBridge;
   getMaxHistoryEntries?: () => number;
+  /** Absolute folder where complete outputs are spilled. Defaults to a folder under the OS temp dir. */
+  getRunsDir?: () => string | undefined;
   onRunStarted?: (record: ExecutionRecord) => void;
   beginActivity?: (entry: {
     client?: string;
@@ -109,6 +128,7 @@ export class ExecutionCoordinator {
   private readonly activeRuns = new Map<string, ActiveRunContext>();
   private readonly historyRuns: ExecutionRecord[] = [];
   private readonly listeners = new Set<ExecutionListener>();
+  private prunedRunsDir = false;
 
   constructor(private readonly deps: ExecutionCoordinatorDeps) {}
 
@@ -159,7 +179,9 @@ export class ExecutionCoordinator {
         this.deps.registry.listAll().map((s) => s.scriptId),
       );
     }
-    return this.runDefinition(script, request.params, request.client, request.timeoutSecondsOverride);
+    return this.runDefinition(script, request.params, request.client, request.timeoutSecondsOverride, {
+      maxOutput: request.maxOutput,
+    });
   }
 
   async runDefinition(
@@ -167,7 +189,12 @@ export class ExecutionCoordinator {
     rawParams?: Record<string, unknown>,
     client = "Manual",
     timeoutSecondsOverride?: number,
+    options: RunOptions = {},
   ): Promise<RunScriptResponse> {
+    const maxOutput =
+      typeof options.maxOutput === "number" && Number.isFinite(options.maxOutput) && options.maxOutput >= 1
+        ? Math.floor(options.maxOutput)
+        : undefined;
     // 1. Gatekeeper validation BEFORE formatting payload or spawning any OS process
     const validation = this.deps.validator.validate(script, rawParams ?? {});
     if (!validation.valid) {
@@ -250,17 +277,38 @@ export class ExecutionCoordinator {
     this.deps.onRunStarted?.(record);
     this.emit({ type: "started", record });
 
+    const runsDir = (): string => this.deps.getRunsDir?.() ?? path.join(os.tmpdir(), "ai-scripts-runs");
+    const spills: Partial<Record<"stdout" | "stderr", SpillFile>> = {};
+    const memoryDropped = { stdout: false, stderr: false };
+    const spillFor = (stream: "stdout" | "stderr"): SpillFile => {
+      let spill = spills[stream];
+      if (!spill) {
+        if (!this.prunedRunsDir) {
+          this.prunedRunsDir = true;
+          pruneSpillDir(runsDir());
+        }
+        spill = new SpillFile(path.join(runsDir(), `${runId}.${stream === "stdout" ? "out" : "err"}`));
+        spills[stream] = spill;
+      }
+      return spill;
+    };
+
     const appendStream = (stream: "stdout" | "stderr", chunk: string): void => {
       const cleanChunk = this.deps.bridge.redact(chunk);
       activityHandle?.appendOutput(stream, cleanChunk);
-      if (stream === "stdout") {
-        record.stdout += cleanChunk;
-      } else {
-        record.stderr += cleanChunk;
+      const before = record[stream];
+      const res = appendCapped(before, cleanChunk, MEMORY_BUFFER_CAP);
+      record[stream] = res.value;
+      if (res.dropped) {
+        memoryDropped[stream] = true;
+        const spill = spillFor(stream);
+        if (!spill.isOpen) spill.open(before);
+        spill.write(cleanChunk);
       }
       record.durationMs = Date.now() - startedAt;
 
       for (const textLine of splitLines(cleanChunk)) {
+        if (record.lines.length >= MAX_RECORD_LINES) break;
         const line: ExecutionLogLine = {
           timestamp: Date.now(),
           stream,
@@ -269,6 +317,40 @@ export class ExecutionCoordinator {
         record.lines.push(line);
         this.emit({ type: "output", record, line });
       }
+    };
+
+    const adoptFinalOutput = (stream: "stdout" | "stderr", text: string): void => {
+      const res = appendCapped("", text, MEMORY_BUFFER_CAP);
+      record[stream] = res.value;
+      if (res.dropped) {
+        memoryDropped[stream] = true;
+        spillFor(stream).open(text);
+      }
+    };
+
+    type OutputPart = Pick<RunScriptResponse, "stdout" | "stderr" | "truncated" | "stdoutFile" | "stderrFile">;
+    const finishOutput = async (): Promise<OutputPart> => {
+      const out: OutputPart = { stdout: record.stdout, stderr: record.stderr };
+      for (const stream of ["stdout", "stderr"] as const) {
+        const text = record[stream];
+        const tooLong = maxOutput !== undefined && text.length > maxOutput;
+        const overLimit = memoryDropped[stream] || tooLong;
+        let file: string | undefined;
+        const existing = spills[stream];
+        if (existing?.isOpen) {
+          if (await existing.close()) file = existing.filePath;
+        } else if (overLimit) {
+          const spill = spillFor(stream);
+          spill.open(text);
+          if (await spill.close()) file = spill.filePath;
+        }
+        if (tooLong) out[stream] = truncateHeadTail(text, maxOutput).text;
+        if (overLimit) {
+          out.truncated = true;
+          if (file) out[stream === "stdout" ? "stdoutFile" : "stderrFile"] = this.displayPath(file);
+        }
+      }
+      return out;
     };
 
     try {
@@ -286,11 +368,9 @@ export class ExecutionCoordinator {
       record.finishedAt = finishedAt;
       record.durationMs = execResult.durationMs || finishedAt - startedAt;
       record.exitCode = execResult.exitCode;
-      if (!record.stdout && execResult.stdout) {
-        record.stdout = this.deps.bridge.redact(execResult.stdout);
-      }
-      if (!record.stderr && execResult.stderr) {
-        record.stderr = this.deps.bridge.redact(execResult.stderr);
+      for (const stream of ["stdout", "stderr"] as const) {
+        const full = execResult[stream];
+        if (!record[stream] && full) adoptFinalOutput(stream, this.deps.bridge.redact(full));
       }
 
       if (controller.signal.aborted || execResult.killed) {
@@ -308,9 +388,8 @@ export class ExecutionCoordinator {
         success: record.status === "succeeded",
         status: record.status,
         exitCode: execResult.exitCode,
-        stdout: record.stdout,
-        stderr: record.stderr,
         durationMs: record.durationMs,
+        ...(await finishOutput()),
       };
     } catch (err) {
       const finishedAt = Date.now();
@@ -334,13 +413,22 @@ export class ExecutionCoordinator {
         success: false,
         status: record.status,
         exitCode: -1,
-        stdout: record.stdout,
-        stderr: record.stderr,
         durationMs: record.durationMs,
+        ...(await finishOutput()),
       };
     } finally {
       await formatted.cleanup();
     }
+  }
+
+  /** Vault-relative path (forward slashes) when the file lives inside the vault, absolute otherwise. */
+  private displayPath(file: string): string {
+    const base = this.deps.bridge.getVaultBasePath();
+    if (base) {
+      const rel = path.relative(base, file);
+      if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) return rel.split(path.sep).join("/");
+    }
+    return file;
   }
 
   private finalizeRecord(record: ExecutionRecord): void {

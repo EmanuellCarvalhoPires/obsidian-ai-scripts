@@ -38,6 +38,8 @@ export interface RunScriptRequest {
   params?: Record<string, unknown>;
   client?: string;
   timeoutSecondsOverride?: number;
+  /** Max characters of stdout/stderr in the response. Omitted: no truncation. */
+  maxOutput?: number;
 }
 
 export interface RunScriptResponse {
@@ -48,6 +50,11 @@ export interface RunScriptResponse {
   stdout: string;
   stderr: string;
   durationMs: number;
+  /** True when stdout or stderr in this response is shorter than the real output. */
+  truncated?: boolean;
+  /** Path of the file holding the complete stdout (vault-relative when inside the vault). */
+  stdoutFile?: string;
+  stderrFile?: string;
 }
 
 export type ExecutionEventType = "started" | "output" | "finished" | "cleared";
