@@ -26,6 +26,11 @@ export const SCRIPT_INDEX_META: Record<string, ScriptIndexMeta> = {
   print_workflow_jira: { efeito: "leitura" },
   projetos_dev: { efeito: "leitura" },
   validar_docx_documentacao: { efeito: "leitura" },
+  // Starter pack
+  links_quebrados: { efeito: "leitura" },
+  notas_orfas: { efeito: "leitura" },
+  extrair_tarefas: { efeito: "leitura" },
+  resumo_do_dia: { efeito: "leitura" },
   // Writes inside the vault
   gerar_log_conversa_gemini: { efeito: "cofre" },
   atualizar_log_conversa_gemini: { efeito: "cofre" },
@@ -44,6 +49,8 @@ export const SCRIPT_INDEX_META: Record<string, ScriptIndexMeta> = {
   deletar_projeto_clonado: { efeito: "externo", aprovacao: "obrigatoria" },
   adicionar_emails_grupo_jira: { efeito: "externo", aprovacao: "obrigatoria" },
   enviar_whatsapp: { efeito: "externo", aprovacao: "obrigatoria" },
+  // Starter pack: writes a zip outside the vault
+  backup_cofre: { efeito: "externo", aprovacao: "obrigatoria" },
 };
 
 /**

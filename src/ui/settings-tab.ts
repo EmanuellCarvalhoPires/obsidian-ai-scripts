@@ -17,6 +17,7 @@ export interface SettingsHost {
   openManualRunModal(initialScriptId?: string): void;
   openScriptEditorModal(existing?: ScriptDefinition): void;
   openNote(path: string): Promise<void>;
+  reinstallStarterScripts(): Promise<number>;
 }
 
 function statusMeta(
@@ -201,6 +202,34 @@ export class AIScriptsSettingTab extends PluginSettingTab {
           await this.host.saveSettings();
         });
       });
+
+    new Setting(containerEl)
+      .setName(t("settings.general.starter"))
+      .setDesc(t("settings.general.starterDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(settings.installStarterPack).onChange(async (val) => {
+          settings.installStarterPack = val;
+          await this.host.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName(t("settings.general.starterReinstall"))
+      .setDesc(t("settings.general.starterReinstallDesc"))
+      .addButton((btn) =>
+        btn
+          .setButtonText(t("settings.general.starterReinstallBtn"))
+          .setIcon("rotate-ccw")
+          .onClick(async () => {
+            const count = await this.host.reinstallStarterScripts();
+            new Notice(
+              count > 0
+                ? t("core.notice.starterInstalled", { count, folder: settings.scriptsFolder })
+                : t("core.notice.starterNone"),
+            );
+            this.display();
+          }),
+      );
   }
 
   private renderLoadedScriptsGroup(containerEl: HTMLElement): void {

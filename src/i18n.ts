@@ -17,6 +17,7 @@ const strings: StringTable = {
     "core.cmd.runScript": "Run automation script manually",
     "core.cmd.createScript": "Create or edit script note",
     "core.cmd.reload": "Reload automation scripts",
+    "core.cmd.reinstallStarter": "Reinstall starter scripts",
     "core.status.connected": "AI Scripts ({count})",
     "core.status.waiting": "AI Scripts: waiting",
     "core.status.disconnected": "AI Scripts: offline",
@@ -25,6 +26,8 @@ const strings: StringTable = {
     "core.status.aria": "Open AI Script Monitor",
     "core.notice.reloaded": "Reloaded {count} script(s).",
     "core.notice.reloadedProblems": "Reloaded {count} script(s) ({problems} problem(s)).",
+    "core.notice.starterInstalled": "Installed {count} starter script(s) in {folder}.",
+    "core.notice.starterNone": "All starter scripts are already present.",
     "core.notice.saveFailed": "Could not save the AI Scripts settings.",
     "core.notice.scriptSaved": "Saved script note at {path}.",
     "core.notice.runStarted": "Started script {name}.",
@@ -70,6 +73,12 @@ const strings: StringTable = {
     "settings.general.historyDesc": "Number of completed script runs kept in memory (10 to 1000).",
     "settings.general.autoOpen": "Open monitor automatically on run",
     "settings.general.autoOpenDesc": "Reveal the AI Script Monitor panel whenever a script starts running.",
+    "settings.general.starter": "Install starter scripts",
+    "settings.general.starterDesc":
+      "Adds a set of generic vault maintenance scripts (broken links, orphan notes, tasks, backup, daily summary) to the scripts folder. Existing notes are never overwritten and deleted scripts are not recreated.",
+    "settings.general.starterReinstall": "Reinstall starter scripts",
+    "settings.general.starterReinstallDesc": "Restores the starter scripts that are missing from the scripts folder.",
+    "settings.general.starterReinstallBtn": "Reinstall",
 
     // Settings tab - Loaded scripts
     "settings.status.heading": "Loaded scripts",
@@ -148,6 +157,7 @@ const strings: StringTable = {
     "core.cmd.runScript": "Executar script de automação manualmente",
     "core.cmd.createScript": "Criar ou editar nota de script",
     "core.cmd.reload": "Recarregar scripts de automação",
+    "core.cmd.reinstallStarter": "Reinstalar scripts iniciais",
     "core.status.connected": "AI Scripts ({count})",
     "core.status.waiting": "AI Scripts: aguardando",
     "core.status.disconnected": "AI Scripts: desconectado",
@@ -156,6 +166,8 @@ const strings: StringTable = {
     "core.status.aria": "Abrir AI Script Monitor",
     "core.notice.reloaded": "{count} script(s) recarregado(s).",
     "core.notice.reloadedProblems": "{count} script(s) recarregado(s) ({problems} problema(s)).",
+    "core.notice.starterInstalled": "{count} script(s) inicial(is) instalado(s) em {folder}.",
+    "core.notice.starterNone": "Todos os scripts iniciais já estão presentes.",
     "core.notice.saveFailed": "Não foi possível salvar as configurações do AI Scripts.",
     "core.notice.scriptSaved": "Nota de script salva em {path}.",
     "core.notice.runStarted": "Script {name} iniciado.",
@@ -201,6 +213,12 @@ const strings: StringTable = {
     "settings.general.historyDesc": "Quantidade de execuções finalizadas mantidas em memória (10 a 1000).",
     "settings.general.autoOpen": "Abrir monitor automaticamente ao executar",
     "settings.general.autoOpenDesc": "Revela o painel AI Script Monitor sempre que um script inicia.",
+    "settings.general.starter": "Instalar scripts iniciais",
+    "settings.general.starterDesc":
+      "Adiciona à pasta de scripts um conjunto de scripts genéricos de manutenção do cofre (links quebrados, notas órfãs, tarefas, backup e resumo do dia). Notas existentes nunca são sobrescritas e scripts apagados não são recriados.",
+    "settings.general.starterReinstall": "Reinstalar scripts iniciais",
+    "settings.general.starterReinstallDesc": "Restaura os scripts iniciais que estão ausentes da pasta de scripts.",
+    "settings.general.starterReinstallBtn": "Reinstalar",
 
     // Settings tab - Loaded scripts
     "settings.status.heading": "Scripts carregados",

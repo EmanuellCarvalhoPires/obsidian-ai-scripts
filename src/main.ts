@@ -11,6 +11,7 @@ import { MODULE_ID, ProcessBridge } from "./execution/process-bridge";
 import { t } from "./i18n";
 import { ObsidianScriptVaultPort, ScriptLoader } from "./scripts/script-loader";
 import { ScriptRegistry } from "./scripts/script-registry";
+import { installStarterScripts } from "./starter/starter-pack";
 import {
   MODULE_INSTRUCTIONS,
   ScriptsService,
@@ -239,14 +240,37 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
       },
     });
 
+    this.addCommand({
+      id: "reinstall-starter-scripts",
+      name: t("core.cmd.reinstallStarter"),
+      callback: () => {
+        void this.reinstallStarterScripts().then((count) => {
+          new Notice(
+            count > 0
+              ? t("core.notice.starterInstalled", { count, folder: this.settings.scriptsFolder })
+              : t("core.notice.starterNone"),
+          );
+        });
+      },
+    });
+
     this.settingTab = new AIScriptsSettingTab(this.app, this, this);
     this.addSettingTab(this.settingTab);
 
-    if (this.app.workspace.layoutReady) {
+    const start = async (): Promise<void> => {
+      if (this.settings.installStarterPack) {
+        const count = await this.installStarterPack(false);
+        if (count > 0) {
+          new Notice(t("core.notice.starterInstalled", { count, folder: this.settings.scriptsFolder }));
+        }
+      }
       void this.loader.load();
+    };
+    if (this.app.workspace.layoutReady) {
+      void start();
     } else {
       this.app.workspace.onLayoutReady(() => {
-        void this.loader.load();
+        void start();
       });
     }
   }
@@ -285,6 +309,13 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
   async reloadScripts(): Promise<ScriptLoadResult> {
     this.loader.invalidate();
     return this.loader.load();
+  }
+
+  /** Restores the starter scripts that are missing (never overwrites). Returns how many were written. */
+  async reinstallStarterScripts(): Promise<number> {
+    const count = await this.installStarterPack(true);
+    await this.reloadScripts();
+    return count;
   }
 
   async openMonitorView(): Promise<void> {
@@ -331,6 +362,31 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
   }
 
   // ---- Internals ------------------------------------------------------------
+
+  /**
+   * Installs the starter scripts that are missing and remembers the handled ids in the settings.
+   * With `restore`, the remembered ids are ignored, so scripts the user deleted come back.
+   */
+  private async installStarterPack(restore: boolean): Promise<number> {
+    try {
+      const result = await installStarterScripts({
+        vault: this.vaultPort,
+        folder: this.settings.scriptsFolder,
+        installedIds: restore ? [] : this.settings.starterPackInstalledIds,
+      });
+      const merged = [
+        ...new Set([...this.settings.starterPackInstalledIds, ...result.installed, ...result.alreadyPresent]),
+      ];
+      if (merged.length !== this.settings.starterPackInstalledIds.length) {
+        this.settings.starterPackInstalledIds = merged;
+        await this.saveData(this.settings);
+      }
+      return result.installed.length;
+    } catch (err) {
+      console.error("[AI Scripts] Could not install the starter scripts", err);
+      return 0;
+    }
+  }
 
   /**
    * Writes the script catalog into the module's tools.db. Skipped until the catalog has loaded once,

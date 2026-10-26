@@ -198,6 +198,7 @@ params:
       openManualRunModal: () => undefined,
       openScriptEditorModal: () => undefined,
       openNote: async () => undefined,
+      reinstallStarterScripts: async () => 0,
     });
     expect("getSettingDefinitions" in tab).toBe(false);
     tab.display();

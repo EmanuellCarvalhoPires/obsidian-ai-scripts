@@ -112,6 +112,10 @@ export interface AIScriptsSettings {
   autoOpenMonitorOnRun: boolean;
   /** Stored for the guided setup only; the plugin does not enforce it. */
   allowWriteOutsideVault: boolean;
+  /** Installs the missing starter scripts into the scripts folder on load. */
+  installStarterPack: boolean;
+  /** Starter script ids already handled, so a script the user deleted is not recreated. */
+  starterPackInstalledIds: string[];
 }
 
 export const DEFAULT_SETTINGS: AIScriptsSettings = {
@@ -120,6 +124,8 @@ export const DEFAULT_SETTINGS: AIScriptsSettings = {
   maxHistoryEntries: 100,
   autoOpenMonitorOnRun: false,
   allowWriteOutsideVault: false,
+  installStarterPack: true,
+  starterPackInstalledIds: [],
 };
 
 export function normalizeFolder(folder: string): string {
@@ -156,6 +162,11 @@ export function normalizeSettings(raw: unknown): AIScriptsSettings {
     typeof obj.allowWriteOutsideVault === "boolean"
       ? obj.allowWriteOutsideVault
       : DEFAULT_SETTINGS.allowWriteOutsideVault;
+  const installStarterPack =
+    typeof obj.installStarterPack === "boolean" ? obj.installStarterPack : DEFAULT_SETTINGS.installStarterPack;
+  const starterPackInstalledIds = Array.isArray(obj.starterPackInstalledIds)
+    ? [...new Set(obj.starterPackInstalledIds.filter((id): id is string => typeof id === "string" && id !== ""))]
+    : [];
 
   return {
     scriptsFolder,
@@ -163,5 +174,7 @@ export function normalizeSettings(raw: unknown): AIScriptsSettings {
     maxHistoryEntries,
     autoOpenMonitorOnRun,
     allowWriteOutsideVault,
+    installStarterPack,
+    starterPackInstalledIds,
   };
 }
