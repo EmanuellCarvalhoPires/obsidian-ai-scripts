@@ -36,7 +36,7 @@ describe("PayloadFormatter", () => {
     expect(formatted.args).toEqual([
       "--instancia",
       "Acme",
-      "--sem_subtarefas",
+      "--sem-subtarefas",
       "--tags",
       "a",
       "--tags",
@@ -44,6 +44,22 @@ describe("PayloadFormatter", () => {
       "PROJ-43",
       "PROJ-45",
     ]);
+    await formatted.cleanup();
+  });
+
+  it("turns underscores of the parameter name into hyphens, unless the schema sets a flag", async () => {
+    const formatted = await formatter.format(
+      "cli_args",
+      { sem_development: true, max_chars: 10, save_path: "x.json", only_one: true },
+      {
+        sem_development: { type: "boolean" },
+        max_chars: { type: "integer", flag: "--max_chars" },
+        save_path: { type: "string", flag: "salvar" },
+        only_one: { type: "boolean" },
+      },
+    );
+
+    expect(formatted.args).toEqual(["--sem-development", "--max_chars", "10", "--salvar", "x.json", "--only-one"]);
     await formatted.cleanup();
   });
 

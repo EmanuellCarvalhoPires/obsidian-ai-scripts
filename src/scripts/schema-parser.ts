@@ -209,6 +209,14 @@ export function parseParamsMap(raw: unknown): {
       schema.positional = true;
     }
 
+    if (spec.flag !== undefined) {
+      if (typeof spec.flag !== "string" || !/^-{0,2}[A-Za-z0-9][A-Za-z0-9_-]*$/.test(spec.flag.trim())) {
+        errors.push(`Parameter "${paramName}": "flag" must be a flag name such as "--sem-subtarefas".`);
+        continue;
+      }
+      schema.flag = spec.flag.trim();
+    }
+
     params[paramName] = schema;
   }
 

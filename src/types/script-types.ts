@@ -29,6 +29,8 @@ export interface ScriptParamSchema {
   items?: ParamType;
   /** Whether an array or scalar argument in cli_args mode should be passed positionally instead of --flag. */
   positional?: boolean;
+  /** Flag used in cli_args mode when the script does not follow the default (name with "_" turned into "-"), e.g. "--max_chars". */
+  flag?: string;
 }
 
 export interface ScriptDefinition {

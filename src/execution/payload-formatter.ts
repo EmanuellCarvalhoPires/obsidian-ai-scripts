@@ -25,6 +25,13 @@ function formatCliScalar(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/** The CLI flag of a parameter: the schema's `flag` when set, else the name with "_" turned into "-" (argparse style). */
+function cliFlagOf(key: string, schema: ScriptParamSchema | undefined): string {
+  const custom = schema?.flag?.trim();
+  if (custom) return custom.startsWith("-") ? custom : `--${custom}`;
+  return `--${key.replace(/_/g, "-")}`;
+}
+
 export class PayloadFormatter {
   private readonly tempDir: string;
 
@@ -54,7 +61,7 @@ export class PayloadFormatter {
           if (value === undefined || value === null) continue;
           const schema = paramSchemas[key];
           const isPositional = schema?.positional === true;
-          const flag = `--${key}`;
+          const flag = cliFlagOf(key, schema);
 
           if (typeof value === "boolean") {
             if (value) {
