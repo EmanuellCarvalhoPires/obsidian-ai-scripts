@@ -1,5 +1,5 @@
 // Entry point of the AI Scripts plugin.
-import { FileSystemAdapter, Notice, Plugin, TAbstractFile, TFile, setIcon } from "obsidian";
+import { FileSystemAdapter, Notice, Plugin, TAbstractFile, TFile, normalizePath, setIcon } from "obsidian";
 import { EcosystemConnector } from "./ecosystem/connector";
 import type { ConnectorStatus } from "./ecosystem/connector";
 import { MissingEcosystemModal } from "./ecosystem/dependency-modal";
@@ -28,8 +28,21 @@ import type { SettingsHost } from "./ui/settings-tab";
 import { ParamValidator } from "./validation/param-validator";
 import { ScriptToolRunner, buildScriptIndexEntries } from "./tools/tool-index";
 
+const SCRIPT_RELOAD_DEBOUNCE_MS = 500;
+
+function isScriptCandidatePath(path: string): boolean {
+  return /\.(md|py|sh|ps1|js|mjs|ts)$/i.test(path);
+}
+
 function isScriptCandidateFile(file: TAbstractFile): file is TFile {
-  return file instanceof TFile && /\.(md|py|sh|ps1|js|mjs|ts)$/i.test(file.path);
+  return file instanceof TFile && isScriptCandidatePath(file.path);
+}
+
+/** True when `path` is inside the scripts folder ("" or "/" means the whole vault). */
+function isInScriptsFolder(path: string, folder: string): boolean {
+  const clean = normalizePath(folder.trim());
+  if (clean === "" || clean === "/") return true;
+  return path.toLowerCase().startsWith(`${clean.toLowerCase()}/`);
 }
 
 export default class AIScriptsPlugin extends Plugin implements SettingsHost {
@@ -406,14 +419,26 @@ export default class AIScriptsPlugin extends Plugin implements SettingsHost {
   }
 
   private registerVaultWatchers(): void {
-    const reloadIfScriptNote = (file: TAbstractFile, oldPath?: string): void => {
-      const isCandidate =
-        isScriptCandidateFile(file) ||
-        (typeof oldPath === "string" && /\.(md|py|sh|ps1|js|mjs|ts)$/i.test(oldPath));
-      if (isCandidate) {
+    // Only files inside the scripts folder matter, and bursts of events (vault indexing at startup)
+    // collapse into one reload. Without both, thousands of concurrent reloads exhaust the heap.
+    let reloadTimer: number | undefined;
+    this.register(() => {
+      if (reloadTimer !== undefined) window.clearTimeout(reloadTimer);
+    });
+    const scheduleReload = (): void => {
+      if (reloadTimer !== undefined) window.clearTimeout(reloadTimer);
+      reloadTimer = window.setTimeout(() => {
+        reloadTimer = undefined;
         this.loader.invalidate();
         void this.loader.load();
-      }
+      }, SCRIPT_RELOAD_DEBOUNCE_MS);
+    };
+    const reloadIfScriptNote = (file: TAbstractFile, oldPath?: string): void => {
+      const folder = this.settings.scriptsFolder;
+      const isCandidate =
+        (isScriptCandidateFile(file) && isInScriptsFolder(file.path, folder)) ||
+        (typeof oldPath === "string" && isScriptCandidatePath(oldPath) && isInScriptsFolder(oldPath, folder));
+      if (isCandidate) scheduleReload();
     };
 
     this.registerEvent(this.app.vault.on("create", (file) => reloadIfScriptNote(file)));
